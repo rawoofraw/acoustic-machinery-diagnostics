@@ -1,0 +1,15 @@
+# Python Virtual Environment
+venv/
+.env
+
+# Audio Data (Never commit raw audio to Git)
+data/raw/
+data/processed/
+
+# PyTorch Model Weights (Too large for standard Git)
+*.pth
+*.pt
+
+# Python cache
+__pycache__/
+*.pyc

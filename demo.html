@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Acoustic Diagnostics Engine</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&family=Inter:wght@300;400;500&display=swap');
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #020817;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 80% 50% at 20% 10%, rgba(56,189,248,0.07) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(99,102,241,0.07) 0%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,0.04) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glass {
+    background: rgba(15, 23, 42, 0.75);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(56, 189, 248, 0.15);
+  }
+
+  .glass-inner {
+    background: rgba(2, 8, 23, 0.7);
+    border: 1px solid rgba(56, 189, 248, 0.1);
+  }
+
+  .title-gradient {
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .btn-run {
+    background: linear-gradient(135deg, rgba(14,165,233,0.9), rgba(99,102,241,0.9));
+    border: 1px solid rgba(56,189,248,0.5);
+    box-shadow: 0 0 20px rgba(56,189,248,0.25), inset 0 1px 0 rgba(255,255,255,0.1);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-run::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .btn-run:hover:not(:disabled)::before { opacity: 1; }
+  .btn-run:hover:not(:disabled) {
+    box-shadow: 0 0 35px rgba(56,189,248,0.45), inset 0 1px 0 rgba(255,255,255,0.15);
+    transform: translateY(-1px);
+  }
+  .btn-run:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  .btn-reset {
+    background: transparent;
+    border: 1px solid rgba(100,116,139,0.5);
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+    color: #94a3b8;
+  }
+  .btn-reset:hover {
+    border-color: rgba(148,163,184,0.7);
+    color: #cbd5e1;
+    background: rgba(148,163,184,0.06);
+  }
+
+  .stage-label {
+    font-family: 'Rajdhani', sans-serif;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+  }
+
+  .badge {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 3px;
+    transition: all 0.4s ease;
+  }
+  .badge-idle {
+    background: rgba(51,65,85,0.6);
+    color: #64748b;
+    border: 1px solid rgba(71,85,105,0.4);
+  }
+  .badge-active {
+    background: rgba(14,165,233,0.18);
+    color: #38bdf8;
+    border: 1px solid rgba(56,189,248,0.45);
+    box-shadow: 0 0 10px rgba(56,189,248,0.2);
+  }
+  .badge-done {
+    background: rgba(52,211,153,0.15);
+    color: #34d399;
+    border: 1px solid rgba(52,211,153,0.4);
+    box-shadow: 0 0 10px rgba(52,211,153,0.15);
+  }
+
+  .stage-box {
+    background: #020817;
+    border: 1px solid rgba(30,41,59,0.8);
+    border-radius: 6px;
+    overflow: hidden;
+    position: relative;
+    min-height: 130px;
+  }
+
+  /* Waveform bars */
+  .waveform {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    height: 100%;
+    padding: 16px 12px;
+    opacity: 0.35;
+    transition: opacity 0.6s ease;
+  }
+  .waveform.lit { opacity: 1; }
+  .wave-bar {
+    width: 3px;
+    border-radius: 2px;
+    background: #38bdf8;
+    animation: wavePulse 1.2s ease-in-out infinite alternate;
+    flex-shrink: 0;
+  }
+  @keyframes wavePulse {
+    0% { transform: scaleY(0.4); }
+    100% { transform: scaleY(1); }
+  }
+
+  /* Spectrogram */
+  .spectrogram-wrap {
+    position: relative;
+    height: 100%;
+    overflow: hidden;
+  }
+  .spectrogram-img {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    transition: opacity 1.2s ease;
+    background:
+      linear-gradient(180deg,
+        #38bdf8 0%, #818cf8 15%, #7c3aed 25%,
+        #ec4899 35%, #f59e0b 50%,
+        #10b981 60%, #06b6d4 72%,
+        #1e40af 82%, #0f172a 92%, #020817 100%
+      ),
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px, transparent 6px,
+        rgba(0,0,0,0.15) 6px, rgba(0,0,0,0.15) 7px
+      );
+    background-blend-mode: multiply;
+  }
+
+  /* Noise overlay on spectrogram */
+  .spectrogram-img::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.12) 3px,
+      rgba(0,0,0,0.12) 4px
+    );
+  }
+  .spectrogram-img.visible { opacity: 1; }
+
+  /* Frequency axis labels */
+  .freq-labels {
+    position: absolute;
+    right: 6px;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0;
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.8s ease 0.8s;
+  }
+  .freq-labels.visible { opacity: 1; }
+  .freq-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.55rem;
+    color: rgba(148,163,184,0.7);
+  }
+
+  /* Scanner laser */
+  .scanner {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, transparent, #f0f9ff, #38bdf8, #f0f9ff, transparent);
+    box-shadow: 0 0 12px 3px rgba(56,189,248,0.8), 0 0 30px 8px rgba(56,189,248,0.3);
+    z-index: 10;
+    display: none;
+    left: 0;
+  }
+  .scanner.scanning {
+    display: block;
+    animation: scanSweep 1.8s linear infinite;
+  }
+  @keyframes scanSweep {
+    0%   { left: 0%; }
+    100% { left: calc(100% - 2px); }
+  }
+
+  /* CNN Output */
+  .cnn-output {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    padding: 16px;
+  }
+  .output-status {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    color: #475569;
+    letter-spacing: 0.08em;
+    transition: all 0.4s ease;
+    text-align: center;
+  }
+  .output-status.anomaly {
+    color: #ef4444;
+    font-size: 1rem;
+    font-weight: 700;
+    animation: anomalyPulse 1s ease-in-out infinite;
+    text-shadow: 0 0 20px rgba(239,68,68,0.6);
+  }
+  @keyframes anomalyPulse {
+    0%, 100% { opacity: 1; text-shadow: 0 0 20px rgba(239,68,68,0.6); }
+    50%  { opacity: 0.6; text-shadow: 0 0 40px rgba(239,68,68,0.9); }
+  }
+
+  .confidence-bar-wrap {
+    width: 100%;
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .confidence-bar-wrap.show { display: flex; }
+  .conf-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.58rem;
+    color: #64748b;
+    display: flex;
+    justify-content: space-between;
+  }
+  .conf-track {
+    height: 4px;
+    background: rgba(30,41,59,0.8);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .conf-fill {
+    height: 100%;
+    border-radius: 2px;
+    width: 0;
+    transition: width 1.2s ease;
+  }
+
+  .anomaly-icon {
+    display: none;
+    width: 36px;
+    height: 36px;
+  }
+  .anomaly-icon.show { display: block; }
+
+  /* Terminal */
+  .terminal {
+    background: #010710;
+    border: 1px solid rgba(30,41,59,0.9);
+    border-radius: 6px;
+    padding: 14px 16px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.72rem;
+    line-height: 1.7;
+    min-height: 120px;
+    overflow-y: auto;
+  }
+  .terminal-line {
+    display: flex;
+    gap: 6px;
+    animation: fadeInLine 0.3s ease;
+  }
+  @keyframes fadeInLine {
+    from { opacity: 0; transform: translateX(-6px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  .t-prompt { color: #38bdf8; }
+  .t-text   { color: #94a3b8; }
+  .t-ok     { color: #34d399; }
+  .t-warn   { color: #f59e0b; }
+  .t-err    { color: #ef4444; }
+
+  .connector {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    padding-top: 60px;
+  }
+  .connector-line {
+    height: 2px;
+    width: 100%;
+    background: linear-gradient(90deg, rgba(30,41,59,0.3), rgba(56,189,248,0.2), rgba(30,41,59,0.3));
+    position: relative;
+  }
+  .connector-arrow {
+    position: absolute;
+    right: -5px;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-left: 6px solid rgba(56,189,248,0.3);
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+
+  /* Stage number */
+  .stage-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(30,41,59,0.8);
+    border: 1px solid rgba(71,85,105,0.5);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #64748b;
+    flex-shrink: 0;
+    transition: all 0.4s ease;
+  }
+  .stage-num.active {
+    background: rgba(14,165,233,0.15);
+    border-color: rgba(56,189,248,0.5);
+    color: #38bdf8;
+    box-shadow: 0 0 8px rgba(56,189,248,0.3);
+  }
+  .stage-num.done {
+    background: rgba(52,211,153,0.12);
+    border-color: rgba(52,211,153,0.4);
+    color: #34d399;
+  }
+
+  .scan-progress {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 2px;
+    background: rgba(56,189,248,0.5);
+    width: 0;
+    transition: none;
+    z-index: 5;
+  }
+
+  @media (max-width: 768px) {
+    .pipeline-grid { grid-template-columns: 1fr !important; }
+    .connector { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="grid-bg"></div>
+
+<div class="relative z-10 min-h-screen flex flex-col items-center justify-start py-10 px-4">
+
+  <!-- Header -->
+  <div class="text-center mb-8">
+    <div class="inline-flex items-center gap-2 mb-3">
+      <div style="width:8px;height:8px;border-radius:50%;background:#38bdf8;box-shadow:0 0 10px #38bdf8;animation:anomalyPulse 2s ease-in-out infinite;"></div>
+      <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;letter-spacing:0.15em;color:#475569;text-transform:uppercase;">System Online</span>
+    </div>
+    <h1 class="title-gradient text-4xl sm:text-5xl mb-2">Acoustic Diagnostics Engine</h1>
+    <p style="font-family:'Rajdhani',sans-serif;font-size:1rem;letter-spacing:0.12em;color:#475569;text-transform:uppercase;">Audio-to-Vision Anomaly Detection Pipeline</p>
+  </div>
+
+  <!-- Main glass card -->
+  <div class="glass rounded-2xl w-full max-w-5xl p-6 sm:p-8" style="box-shadow: 0 0 60px rgba(56,189,248,0.06), 0 25px 50px rgba(0,0,0,0.5);">
+
+    <!-- Controls -->
+    <div class="flex items-center justify-center gap-4 mb-8">
+      <button id="btn-run" class="btn-run text-white text-sm px-6 py-2.5 rounded-lg" onclick="runPipeline()">
+        ▶ &nbsp;Run Diagnostic Pipeline
+      </button>
+      <button id="btn-reset" class="btn-reset text-sm px-6 py-2.5 rounded-lg" onclick="resetPipeline()">
+        ↺ &nbsp;Reset
+      </button>
+    </div>
+
+    <!-- Pipeline Grid -->
+    <div class="pipeline-grid grid gap-0 mb-6" style="grid-template-columns: 1fr 28px 1fr 28px 1fr; align-items: start;">
+
+      <!-- Stage 1: Raw Audio -->
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <div class="stage-num" id="num-1">1</div>
+          <span class="stage-label text-slate-400">Raw Audio Waveform</span>
+          <span class="badge badge-idle ml-auto" id="badge-1">STANDBY</span>
+        </div>
+        <div class="stage-box" style="height:145px;">
+          <div class="waveform" id="waveform"></div>
+        </div>
+        <div class="mt-1.5 flex justify-between" style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:#334155;">
+          <span>SR: 16,000 Hz</span><span>BIT: 16-bit PCM</span>
+        </div>
+      </div>
+
+      <!-- Connector 1→2 -->
+      <div class="connector">
+        <div class="connector-line"><div class="connector-arrow"></div></div>
+      </div>
+
+      <!-- Stage 2: Spectrogram -->
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <div class="stage-num" id="num-2">2</div>
+          <span class="stage-label text-slate-400">Log-Mel Spectrogram</span>
+          <span class="badge badge-idle ml-auto" id="badge-2">STANDBY</span>
+        </div>
+        <div class="stage-box" style="height:145px;">
+          <div class="spectrogram-wrap" style="height:145px;">
+            <div class="spectrogram-img" id="spectrogram"></div>
+            <div class="scanner" id="scanner"></div>
+            <div class="freq-labels" id="freq-labels">
+              <span class="freq-label">8k Hz</span>
+              <span class="freq-label">4k</span>
+              <span class="freq-label">2k</span>
+              <span class="freq-label">1k</span>
+              <span class="freq-label">500</span>
+              <span class="freq-label">250</span>
+              <span class="freq-label">125</span>
+            </div>
+          </div>
+        </div>
+        <div class="mt-1.5 flex justify-between" style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:#334155;">
+          <span>n_mels: 128</span><span>win: 25ms / hop: 10ms</span>
+        </div>
+      </div>
+
+      <!-- Connector 2→3 -->
+      <div class="connector">
+        <div class="connector-line"><div class="connector-arrow"></div></div>
+      </div>
+
+      <!-- Stage 3: CNN Output -->
+      <div>
+        <div class="flex items-center gap-2 mb-2">
+          <div class="stage-num" id="num-3">3</div>
+          <span class="stage-label text-slate-400">CNN Classification</span>
+          <span class="badge badge-idle ml-auto" id="badge-3">STANDBY</span>
+        </div>
+        <div class="stage-box" style="height:145px;">
+          <div class="cnn-output">
+            <div class="output-status" id="output-status">AWAITING INPUT</div>
+            <svg class="anomaly-icon" id="anomaly-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 4L33 30H3L18 4Z" stroke="#ef4444" stroke-width="1.5" stroke-linejoin="round" fill="rgba(239,68,68,0.08)"/>
+              <path d="M18 14v7" stroke="#ef4444" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="18" cy="25" r="1.2" fill="#ef4444"/>
+            </svg>
+            <div class="confidence-bar-wrap" id="conf-bars">
+              <div class="conf-label"><span>ANOMALY</span><span id="pct-a">0%</span></div>
+              <div class="conf-track"><div class="conf-fill" id="fill-a" style="background:linear-gradient(90deg,#ef4444,#f87171);"></div></div>
+              <div class="conf-label" style="margin-top:4px;"><span>NORMAL</span><span id="pct-n">0%</span></div>
+              <div class="conf-track"><div class="conf-fill" id="fill-n" style="background:linear-gradient(90deg,#475569,#64748b);"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-1.5 flex justify-between" style="font-family:'Share Tech Mono',monospace;font-size:0.58rem;color:#334155;">
+          <span>Model: ResNet-18</span><span>Classes: 2</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="glass-inner rounded-xl p-0 overflow-hidden">
+      <div style="background:rgba(2,8,23,0.9);padding:8px 14px;border-bottom:1px solid rgba(30,41,59,0.8);display:flex;align-items:center;gap:8px;">
+        <div style="width:10px;height:10px;border-radius:50%;background:#ef4444;opacity:0.7;"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#f59e0b;opacity:0.7;"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:#34d399;opacity:0.7;"></div>
+        <span style="font-family:'Share Tech Mono',monospace;font-size:0.65rem;color:#334155;margin-left:6px;letter-spacing:0.1em;">DIAGNOSTIC_CONSOLE — acoustic_pipeline v2.4.1</span>
+      </div>
+      <div class="terminal" id="terminal"></div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="mt-6 text-center" style="font-family:'Share Tech Mono',monospace;font-size:0.6rem;color:#1e293b;letter-spacing:0.1em;">
+    ACOUSTIC DIAGNOSTICS ENGINE &nbsp;•&nbsp; PIPELINE v2.4.1 &nbsp;•&nbsp; MODEL: RESNET-18-MEL
+  </div>
+</div>
+
+<script>
+const WAVE_HEIGHTS = [18,28,42,60,75,88,95,85,70,55,40,52,68,80,90,82,66,50,36,24,30,48,65,78,88,95,80,62,45,32,20,14,22,38,55,72,85,90,78,60,44,30,18,26,44,60,74,86,80,65,48,34,20,15,25,42,58,72,84,90,76,58,40,26,18,14,20,36,52,68,82,90,84,70,54,38,24];
+
+function buildWaveform() {
+  const wrap = document.getElementById('waveform');
+  wrap.innerHTML = '';
+  WAVE_HEIGHTS.forEach((h, i) => {
+    const bar = document.createElement('div');
+    bar.className = 'wave-bar';
+    bar.style.height = h + 'px';
+    bar.style.animationDelay = (i * 0.03) + 's';
+    bar.style.animationDuration = (0.9 + Math.random() * 0.6) + 's';
+    bar.style.opacity = 0.6 + (h / 100) * 0.4;
+    wrap.appendChild(bar);
+  });
+}
+
+function log(text, type = 't-text', delay = 0) {
+  return new Promise(res => setTimeout(() => {
+    const term = document.getElementById('terminal');
+    const line = document.createElement('div');
+    line.className = 'terminal-line';
+    line.innerHTML = `<span class="t-prompt">&gt;</span><span class="${type}">${text}</span>`;
+    term.appendChild(line);
+    term.scrollTop = term.scrollHeight;
+    res();
+  }, delay));
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function setBadge(n, state) {
+  const badge = document.getElementById('badge-' + n);
+  const num   = document.getElementById('num-' + n);
+  badge.className = 'badge badge-' + state + ' ml-auto';
+  num.className = 'stage-num ' + (state === 'idle' ? '' : state === 'active' ? 'active' : 'done');
+  const labels = { idle: 'STANDBY', active: 'PROCESSING', done: 'COMPLETE' };
+  badge.textContent = labels[state];
+}
+
+async function runPipeline() {
+  document.getElementById('btn-run').disabled = true;
+
+  /* Step 1 — Ingest */
+  setBadge(1, 'active');
+  document.getElementById('waveform').classList.add('lit');
+  await log('Ingesting raw waveform [16,000 Hz]...', 't-text');
+  await sleep(600);
+  await log('Buffer filled: 3.2s sample captured.', 't-ok');
+  await sleep(400);
+  setBadge(1, 'done');
+  await sleep(400);
+
+  /* Step 2 — Transform */
+  setBadge(2, 'active');
+  document.getElementById('spectrogram').classList.add('visible');
+  document.getElementById('freq-labels').classList.add('visible');
+  await log('Applying Short-Time Fourier Transform (STFT)...', 't-text');
+  await sleep(500);
+  await log('Applying Mel Filter Banks [n_mels=128]...', 't-text');
+  await sleep(600);
+  await log('Converting to Decibel scale (Log-Mel)...', 't-text');
+
+  document.getElementById('scanner').classList.add('scanning');
+  await sleep(700);
+  await log('Tensor shape: [1 × 128 × 320] — ready for inference.', 't-ok');
+  await sleep(1200);
+  document.getElementById('scanner').classList.remove('scanning');
+  setBadge(2, 'done');
+  await sleep(400);
+
+  /* Step 3 — Classify */
+  setBadge(3, 'active');
+  await log('Passing 2D tensor to ResNet-18 CNN...', 't-text');
+  await sleep(700);
+  await log('Forward pass complete. Softmax output ready.', 't-ok');
+  await sleep(400);
+
+  const status = document.getElementById('output-status');
+  status.textContent = 'ANOMALY DETECTED';
+  status.classList.add('anomaly');
+  document.getElementById('anomaly-icon').classList.add('show');
+  document.getElementById('conf-bars').classList.add('show');
+
+  setTimeout(() => {
+    document.getElementById('fill-a').style.width = '91%';
+    document.getElementById('fill-n').style.width = '9%';
+    document.getElementById('pct-a').textContent = '91.4%';
+    document.getElementById('pct-n').textContent = '8.6%';
+  }, 100);
+
+  await log('Classification: ANOMALY detected (confidence 91.4%).', 't-err');
+  await sleep(300);
+  await log('Frequency band flagged: 42 (≈ 2,840 Hz).', 't-err');
+  await sleep(200);
+  await log('⚠  Recommend immediate mechanical inspection.', 't-warn');
+  setBadge(3, 'done');
+
+  document.getElementById('btn-run').disabled = false;
+}
+
+function resetPipeline() {
+  document.getElementById('btn-run').disabled = false;
+  [1,2,3].forEach(n => setBadge(n, 'idle'));
+  document.getElementById('waveform').classList.remove('lit');
+  document.getElementById('spectrogram').classList.remove('visible');
+  document.getElementById('freq-labels').classList.remove('visible');
+  document.getElementById('scanner').classList.remove('scanning');
+  const status = document.getElementById('output-status');
+  status.textContent = 'AWAITING INPUT';
+  status.classList.remove('anomaly');
+  document.getElementById('anomaly-icon').classList.remove('show');
+  document.getElementById('conf-bars').classList.remove('show');
+  document.getElementById('fill-a').style.width = '0';
+  document.getElementById('fill-n').style.width = '0';
+  document.getElementById('pct-a').textContent = '0%';
+  document.getElementById('pct-n').textContent = '0%';
+  const term = document.getElementById('terminal');
+  term.innerHTML = '';
+  const line = document.createElement('div');
+  line.className = 'terminal-line';
+  line.innerHTML = '<span class="t-prompt">&gt;</span><span class="t-text">System initialized. Ready for acoustic input.</span>';
+  term.appendChild(line);
+}
+
+buildWaveform();
+resetPipeline();
+</script>
+</body>
+</html>
